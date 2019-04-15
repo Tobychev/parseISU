@@ -7,7 +7,8 @@ from subprocess import check_output
 
 mods = re.compile("\W")
 digits = re.compile("\d")
-box = pd.read_csv("box_edges.cvs",comment="#").set_index(["type","class","segment","num","part"])
+box = pd.read_csv("box_edges.csv",comment="#").set_index(["type","class","segment","num","part"])
+test = pd.read_csv("canary.csv",comment="#").set_index(["type","class","segment","num","part"])
 
 def parse_element(element_string,info):
     element_string = element_string.split("+")
@@ -122,18 +123,12 @@ def parse_program_scores(table):
 def parse_deductions(table):
     deduct = {}
 
-    if "(" in "".join(*table.df.values):
-        with_paren = True
-    else:
-        with_paren = False
-
-    if len(table.df.iloc[0,1:]) > 1:
-        dat_itr = iter(table.df.iloc[0,1:-1])
+    if table.df.size > 1:
+        dat_itr = iter(table.df.values[0])
         for entry in dat_itr:
-            deduct[ entry.replace(":","") ] = float(next(dat_itr))
-            # Contains useless (1) style annotation, step over it
-            if with_paren:
-                next(dat_itr)
+            # If this isn't true we are probably looking at an "(1)" type annotation
+            if ":" in entry:
+                deduct[ entry.replace(":","") ] = float(next(dat_itr))
 
     deduct["total"] = float(table.df.iloc[0,-1])
     return deduct
@@ -148,7 +143,7 @@ def try_get_canary(file,file_type,age_class,competition_segment,page):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         canary = "{0},{2},{1},{3}".format( 
-            *box.loc["isucalc",age_class,competition_segment,"2","canary"].values)
+            *box.loc[file_type,age_class,competition_segment,"2","canary"].values)        
 
         try: 
             data = camelot.read_pdf(filepath=file, flavor="stream",
@@ -156,6 +151,10 @@ def try_get_canary(file,file_type,age_class,competition_segment,page):
             return True
         except ValueError:
             return False
+
+def determine_layout_version(file,file_type,age_class,competition_segment,page):
+    pass
+
 
 def get_result_from_table(file,pages,header_box,element_box,program_box,deduction_box,element_columns):
     data = camelot.read_pdf(filepath=file,
@@ -199,7 +198,7 @@ def get_result_from_table(file,pages,header_box,element_box,program_box,deductio
             results.append(entry)
 
     return results
-       
+
 
 def get_result_from_page_by_type(file,file_type,age_class,competition_segment,num_on_page,pages):
 
@@ -247,8 +246,8 @@ def get_results(file,gender_class=None):
 
     if "seniorer" in file.lower():
         age_class = "senior"
-#    elif "ungdom" in file.lower():
-#        age_class = "ungdom"
+    elif "ungdom" in file.lower():
+        age_class = "ungdom"
     else: 
         warnings.warn("Hoppar över fil {}: enbart seniorklassen stöds just nu".format(file),stacklevel=1)
         return []
@@ -285,6 +284,7 @@ def get_results(file,gender_class=None):
     for entry in data:
         entry["competition"] = {"segment":competition_segment,
                                 "gender_class":gender_class,
-                                "date":date}
+                                "date":date,
+                                "file":file}
         
     return data
